@@ -1,0 +1,14 @@
+services:
+  - type: web
+    name: whatsapp-bot-api
+    env: node
+    plan: free
+    buildCommand: npm install
+    startCommand: npm start
+    envVars:
+      - key: PORT
+        sync: false
+      - key: SESSION_FILE
+        value: ./auth_info.json
+    autoDeploy: true
+    branch: main
