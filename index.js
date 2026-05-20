@@ -5,12 +5,15 @@ const QRCode = require('qrcode');
 const fs = require('fs');
 const path = require('path');
 const https = require('https');
+const cors = require('cors');
 
 const app = express();
-app.use(express.json());
+app.use(cors());
+app.use(express.json({ limit: '50mb' }));
 
 const PORT = process.env.PORT || 3000;
 const SESSION_DIR = process.env.SESSION_DIR || './auth_info';
+const API_KEY = process.env.API_KEY;
 
 let sock;
 let isReady = false;
@@ -54,22 +57,47 @@ async function startWhatsApp() {
   });
 }
 
+// Auth middleware
+function requireAuth(req, res, next) {
+  const header = req.headers.authorization;
+  if (!API_KEY) return next();
+  if (!header || !header.startsWith('Bearer ') || header.slice(7) !== API_KEY) {
+    return res.status(401).json({ error: 'Unauthorized — invalid or missing API Key' });
+  }
+  next();
+}
+
 // API endpoints
 app.get('/ping', (req, res) => res.send('pong'));
 
-app.get('/status', (req, res) => {
+app.get('/status', requireAuth, (req, res) => {
   res.json({
     connected: isReady,
     qrCode: global.qrCodeDataURL || null,
   });
 });
 
-app.post('/send', async (req, res) => {
+app.post('/send', requireAuth, async (req, res) => {
   if (!isReady) return res.status(503).json({ error: 'WhatsApp not connected' });
-  const { to, message } = req.body;
-  if (!to || !message) return res.status(400).json({ error: '`to` and `message` required' });
+  const { to, message, image, audio, video, document: doc } = req.body;
+  if (!to) return res.status(400).json({ error: '`to` is required' });
+
   try {
-    await sock.sendMessage(to, { text: message });
+    let content;
+    if (image) {
+      content = { image: image.url ? { url: image.url } : image, caption: image.caption || '' };
+    } else if (audio) {
+      content = { audio: audio.url ? { url: audio.url } : audio, mimetype: audio.mimetype || 'audio/mp4' };
+    } else if (video) {
+      content = { video: video.url ? { url: video.url } : video, caption: video.caption || '' };
+    } else if (doc) {
+      content = { document: doc.url ? { url: doc.url } : doc, fileName: doc.filename || 'file', mimetype: doc.mimetype || 'application/octet-stream' };
+    } else {
+      if (!message) return res.status(400).json({ error: '`message` or media (image/audio/video/document) is required' });
+      content = { text: message };
+    }
+
+    await sock.sendMessage(to, content);
     res.json({ success: true });
   } catch (err) {
     console.error('❌ Failed to send message', err);
@@ -77,9 +105,8 @@ app.post('/send', async (req, res) => {
   }
 });
 
-app.get('/qr', (req, res) => {
+app.get('/qr', requireAuth, (req, res) => {
   if (global.qrCodeDataURL) {
-    // Return the QR as PNG image
     const img = Buffer.from(global.qrCodeDataURL.split(',')[1], 'base64');
     res.type('png').send(img);
   } else {
