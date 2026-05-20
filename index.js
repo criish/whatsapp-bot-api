@@ -1,10 +1,6 @@
-// index.js
-// WhatsApp connection using Baileys and expose REST API via Express
-// Requires: @adiwajshing/baileys, express, qrcode, dotenv, fs
-
 require('dotenv').config();
 const express = require('express');
-const { default: makeWASocket, useSingleFileAuthState, DisconnectReason, fetchLatestBaileysVersion } = require('@adiwajshing/baileys');
+const { default: makeWASocket, useMultiFileAuthState, DisconnectReason, fetchLatestBaileysVersion } = require('@whiskeysockets/baileys');
 const QRCode = require('qrcode');
 const fs = require('fs');
 const path = require('path');
@@ -13,16 +9,14 @@ const app = express();
 app.use(express.json());
 
 const PORT = process.env.PORT || 3000;
-const SESSION_FILE = process.env.SESSION_FILE || './auth_info.json';
+const SESSION_DIR = process.env.SESSION_DIR || './auth_info';
 
-// Auth state persisted to single file
-const { state, saveState } = useSingleFileAuthState(SESSION_FILE);
-
-let sock; // Will hold the WA socket instance
+let sock;
 let isReady = false;
 
 async function startWhatsApp() {
   const { version } = await fetchLatestBaileysVersion();
+  const { state, saveCreds } = await useMultiFileAuthState(SESSION_DIR);
   sock = makeWASocket({
     version,
     printQRInTerminal: false,
@@ -48,7 +42,7 @@ async function startWhatsApp() {
     }
   });
 
-  sock.ev.on('creds.update', saveState);
+  sock.ev.on('creds.update', saveCreds);
 
   // Simple message logger
   sock.ev.on('messages.upsert', ({ messages, type }) => {

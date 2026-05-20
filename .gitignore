@@ -3,6 +3,6 @@ npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 .env
-auth_info.json
+auth_info/
 *.log
 .DS_Store
