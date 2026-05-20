@@ -10,5 +10,5 @@ services:
         sync: false
       - key: SESSION_DIR
         value: ./auth_info
-    autoDeploy: true
+    autoDeploy: false
     branch: main
