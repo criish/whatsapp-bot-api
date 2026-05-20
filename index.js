@@ -79,8 +79,9 @@ app.get('/status', requireAuth, (req, res) => {
 
 app.post('/send', requireAuth, async (req, res) => {
   if (!isReady) return res.status(503).json({ error: 'WhatsApp not connected' });
-  const { to, message, image, audio, video, document: doc } = req.body;
+  let { to, message, image, audio, video, document: doc } = req.body;
   if (!to) return res.status(400).json({ error: '`to` is required' });
+  if (!to.includes('@')) to = to.replace(/\D/g, '') + '@s.whatsapp.net';
 
   try {
     let content;
