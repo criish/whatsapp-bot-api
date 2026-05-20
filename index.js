@@ -4,6 +4,7 @@ const { default: makeWASocket, useMultiFileAuthState, DisconnectReason, fetchLat
 const QRCode = require('qrcode');
 const fs = require('fs');
 const path = require('path');
+const https = require('https');
 
 const app = express();
 app.use(express.json());
@@ -54,6 +55,8 @@ async function startWhatsApp() {
 }
 
 // API endpoints
+app.get('/ping', (req, res) => res.send('pong'));
+
 app.get('/status', (req, res) => {
   res.json({
     connected: isReady,
@@ -87,5 +90,14 @@ app.get('/qr', (req, res) => {
 app.listen(PORT, () => {
   console.log(`🚀 Server listening on http://localhost:${PORT}`);
 });
+
+// Self-ping every 10 minutes to help prevent Render standby
+setInterval(() => {
+  https.get('https://whatsapp-bot-api-hnmk.onrender.com/ping', (res) => {
+    console.log(`[keep-alive] Self-ping status: ${res.statusCode}`);
+  }).on('error', (err) => {
+    console.error('[keep-alive] Self-ping failed:', err.message);
+  });
+}, 10 * 60 * 1000);
 
 startWhatsApp().catch(err => console.error('Failed to start WhatsApp', err));
