@@ -18,46 +18,69 @@ const MONGODB_URI = process.env.MONGODB_URI;
 let sock;
 let isReady = false;
 let lastError = null;
+let initStep = 'starting';
 
 async function startWhatsApp() {
-  const { version } = await fetchLatestBaileysVersion();
-  const mongoClient = new MongoClient(MONGODB_URI);
-  await mongoClient.connect();
-  const { state, saveCreds } = await useMongoAuthState(mongoClient);
-  sock = makeWASocket({
-    version,
-    printQRInTerminal: false,
-    auth: state,
-  });
+  try {
+    initStep = 'fetching version';
+    console.log('[init] Fetching Baileys version...');
+    const { version } = await fetchLatestBaileysVersion();
 
-  sock.ev.on('connection.update', async (update) => {
-    const { connection, lastDisconnect, qr } = update;
-    if (qr) {
-      // Generate QR code as data URL and store globally for API
-      const qrDataURL = await QRCode.toDataURL(qr);
-      global.qrCodeDataURL = qrDataURL;
-    }
-    if (connection === 'close') {
-      const shouldReconnect = (lastDisconnect?.error?.output?.statusCode ?? DisconnectReason.disconnect) !== DisconnectReason.loggedOut;
-      console.log('Connection closed due to', lastDisconnect?.error, ', reconnecting:', shouldReconnect);
-      isReady = false;
-      if (shouldReconnect) startWhatsApp();
-    } else if (connection === 'open') {
-      console.log('✅ WhatsApp connection opened');
-      isReady = true;
-      global.qrCodeDataURL = null; // QR no longer needed
-    }
-  });
+    initStep = 'connecting MongoDB';
+    console.log('[init] Connecting to MongoDB...');
+    const mongoClient = new MongoClient(MONGODB_URI, {
+      serverSelectionTimeoutMS: 10000,
+      connectTimeoutMS: 10000,
+    });
+    await mongoClient.connect();
+    console.log('[init] MongoDB connected');
 
-  sock.ev.on('creds.update', saveCreds);
+    initStep = 'loading auth state';
+    console.log('[init] Loading auth state...');
+    const { state, saveCreds } = await useMongoAuthState(mongoClient);
 
-  // Simple message logger
-  sock.ev.on('messages.upsert', ({ messages, type }) => {
-    if (type === 'notify') {
-      const msg = messages[0];
-      console.log('📩 New message from', msg.key.remoteJid, ':', msg.message?.conversation ?? '(non-text)');
-    }
-  });
+    initStep = 'creating socket';
+    console.log('[init] Creating WhatsApp socket...');
+    sock = makeWASocket({
+      version,
+      printQRInTerminal: false,
+      auth: state,
+    });
+
+    sock.ev.on('connection.update', async (update) => {
+      const { connection, lastDisconnect, qr } = update;
+      if (qr) {
+        console.log('[init] QR code received');
+        const qrDataURL = await QRCode.toDataURL(qr);
+        global.qrCodeDataURL = qrDataURL;
+      }
+      if (connection === 'close') {
+        const shouldReconnect = (lastDisconnect?.error?.output?.statusCode ?? DisconnectReason.disconnect) !== DisconnectReason.loggedOut;
+        console.log('Connection closed due to', lastDisconnect?.error, ', reconnecting:', shouldReconnect);
+        isReady = false;
+        if (shouldReconnect) startWhatsApp();
+      } else if (connection === 'open') {
+        console.log('✅ WhatsApp connection opened');
+        isReady = true;
+        global.qrCodeDataURL = null;
+      }
+    });
+
+    sock.ev.on('creds.update', saveCreds);
+
+    sock.ev.on('messages.upsert', ({ messages, type }) => {
+      if (type === 'notify') {
+        const msg = messages[0];
+        console.log('📩 New message from', msg.key.remoteJid, ':', msg.message?.conversation ?? '(non-text)');
+      }
+    });
+
+    initStep = 'ready';
+    console.log('[init] WhatsApp initialization complete');
+  } catch (err) {
+    lastError = err.message;
+    console.error('[init] FAILED at step:', initStep, err);
+  }
 }
 
 // Auth middleware
@@ -78,7 +101,8 @@ app.get('/debug', (req, res) => {
     whatsappConnected: isReady,
     hasQrCode: !!global.qrCodeDataURL,
     hasMongoUri: !!MONGODB_URI,
-    mongodbUriPrefix: MONGODB_URI ? MONGODB_URI.slice(0, 20) + '...' : null,
+    mongodbUriPrefix: MONGODB_URI ? MONGODB_URI.slice(0, 25) + '...' : null,
+    initStep,
     lastError,
   });
 });
@@ -145,7 +169,4 @@ setInterval(() => {
   });
 }, 10 * 60 * 1000);
 
-startWhatsApp().catch(err => {
-  lastError = err.message;
-  console.error('Failed to start WhatsApp', err);
-});
+startWhatsApp();
