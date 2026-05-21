@@ -1,9 +1,8 @@
 require('dotenv').config();
 const express = require('express');
-const { default: makeWASocket, useMultiFileAuthState, DisconnectReason, fetchLatestBaileysVersion } = require('@whiskeysockets/baileys');
+const { default: makeWASocket, useMongoDBAuthState, DisconnectReason, fetchLatestBaileysVersion } = require('@whiskeysockets/baileys');
+const { MongoClient } = require('mongodb');
 const QRCode = require('qrcode');
-const fs = require('fs');
-const path = require('path');
 const https = require('https');
 const cors = require('cors');
 
@@ -12,15 +11,17 @@ app.use(cors());
 app.use(express.json({ limit: '50mb' }));
 
 const PORT = process.env.PORT || 3000;
-const SESSION_DIR = process.env.SESSION_DIR || './auth_info';
 const API_KEY = process.env.API_KEY;
+const MONGODB_URI = process.env.MONGODB_URI;
 
 let sock;
 let isReady = false;
 
 async function startWhatsApp() {
   const { version } = await fetchLatestBaileysVersion();
-  const { state, saveCreds } = await useMultiFileAuthState(SESSION_DIR);
+  const mongoClient = new MongoClient(MONGODB_URI);
+  await mongoClient.connect();
+  const { state, saveCreds } = await useMongoDBAuthState(mongoClient);
   sock = makeWASocket({
     version,
     printQRInTerminal: false,
