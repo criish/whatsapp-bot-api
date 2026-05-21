@@ -1,7 +1,8 @@
 require('dotenv').config();
 const express = require('express');
-const { default: makeWASocket, useMongoDBAuthState, DisconnectReason, fetchLatestBaileysVersion } = require('@whiskeysockets/baileys');
+const { default: makeWASocket, DisconnectReason, fetchLatestBaileysVersion } = require('@whiskeysockets/baileys');
 const { MongoClient } = require('mongodb');
+const { useMongoAuthState } = require('./mongo-auth-state');
 const QRCode = require('qrcode');
 const https = require('https');
 const cors = require('cors');
@@ -21,7 +22,7 @@ async function startWhatsApp() {
   const { version } = await fetchLatestBaileysVersion();
   const mongoClient = new MongoClient(MONGODB_URI);
   await mongoClient.connect();
-  const { state, saveCreds } = await useMongoDBAuthState(mongoClient);
+  const { state, saveCreds } = await useMongoAuthState(mongoClient);
   sock = makeWASocket({
     version,
     printQRInTerminal: false,
