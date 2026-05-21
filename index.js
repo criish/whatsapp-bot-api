@@ -107,7 +107,7 @@ app.post('/send', requireAuth, async (req, res) => {
   }
 });
 
-app.get('/qr', requireAuth, (req, res) => {
+app.get('/qr', (req, res) => {
   if (global.qrCodeDataURL) {
     const img = Buffer.from(global.qrCodeDataURL.split(',')[1], 'base64');
     res.type('png').send(img);
