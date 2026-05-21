@@ -31,6 +31,8 @@ async function startWhatsApp() {
     const mongoClient = new MongoClient(MONGODB_URI, {
       serverSelectionTimeoutMS: 10000,
       connectTimeoutMS: 10000,
+      tls: true,
+      tlsInsecure: true,
     });
     await mongoClient.connect();
     console.log('[init] MongoDB connected');
