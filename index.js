@@ -15,6 +15,11 @@ const PORT = process.env.PORT || 3000;
 const API_KEY = process.env.API_KEY;
 const MONGODB_URI = process.env.MONGODB_URI;
 
+// Ensure TLS params for Atlas compatibility
+const mongoUri = MONGODB_URI
+  ? MONGODB_URI + (MONGODB_URI.includes('?') ? '&' : '?') + 'tls=true&tlsAllowInvalidCertificates=true&tlsAllowInvalidHostnames=true'
+  : null;
+
 let sock;
 let isReady = false;
 let lastError = null;
@@ -28,11 +33,9 @@ async function startWhatsApp() {
 
     initStep = 'connecting MongoDB';
     console.log('[init] Connecting to MongoDB...');
-    const mongoClient = new MongoClient(MONGODB_URI, {
+    const mongoClient = new MongoClient(mongoUri, {
       serverSelectionTimeoutMS: 10000,
       connectTimeoutMS: 10000,
-      tls: true,
-      tlsInsecure: true,
     });
     await mongoClient.connect();
     console.log('[init] MongoDB connected');
