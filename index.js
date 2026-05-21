@@ -17,6 +17,7 @@ const MONGODB_URI = process.env.MONGODB_URI;
 
 let sock;
 let isReady = false;
+let lastError = null;
 
 async function startWhatsApp() {
   const { version } = await fetchLatestBaileysVersion();
@@ -72,6 +73,16 @@ function requireAuth(req, res, next) {
 // API endpoints
 app.get('/ping', (req, res) => res.send('pong'));
 
+app.get('/debug', (req, res) => {
+  res.json({
+    whatsappConnected: isReady,
+    hasQrCode: !!global.qrCodeDataURL,
+    hasMongoUri: !!MONGODB_URI,
+    mongodbUriPrefix: MONGODB_URI ? MONGODB_URI.slice(0, 20) + '...' : null,
+    lastError,
+  });
+});
+
 app.get('/status', requireAuth, (req, res) => {
   res.json({
     connected: isReady,
@@ -112,8 +123,12 @@ app.get('/qr', (req, res) => {
   if (global.qrCodeDataURL) {
     const img = Buffer.from(global.qrCodeDataURL.split(',')[1], 'base64');
     res.type('png').send(img);
+  } else if (lastError) {
+    res.status(503).json({ error: 'WhatsApp failed to start', details: lastError });
+  } else if (isReady) {
+    res.status(400).json({ error: 'WhatsApp already connected — no QR needed' });
   } else {
-    res.status(404).json({ error: 'QR code not available' });
+    res.status(404).json({ error: 'QR code not available yet', hint: 'Check /debug for connection status' });
   }
 });
 
@@ -130,4 +145,7 @@ setInterval(() => {
   });
 }, 10 * 60 * 1000);
 
-startWhatsApp().catch(err => console.error('Failed to start WhatsApp', err));
+startWhatsApp().catch(err => {
+  lastError = err.message;
+  console.error('Failed to start WhatsApp', err);
+});
